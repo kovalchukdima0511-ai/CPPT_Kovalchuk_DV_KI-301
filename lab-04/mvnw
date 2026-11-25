@@ -1,0 +1,24 @@
+#!/bin/sh
+# Minimal Maven Wrapper for macOS/Ubuntu.
+# Downloads the Maven version from .mvn/wrapper/maven-wrapper.properties once
+# into ~/.m2/wrapper/dists and runs it with the given arguments.
+set -e
+BASEDIR=$(cd "$(dirname "$0")" && pwd)
+URL=$(sed -n 's/^distributionUrl=//p' "$BASEDIR/.mvn/wrapper/maven-wrapper.properties" | tr -d '\r')
+NAME=$(basename "$URL" -bin.zip)
+DIST="$HOME/.m2/wrapper/dists/$NAME"
+if [ ! -x "$DIST/bin/mvn" ]; then
+  echo "Downloading $URL"
+  mkdir -p "$HOME/.m2/wrapper/dists"
+  TMP=$(mktemp -d)
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "$TMP/maven.zip" "$URL"
+  else
+    wget -q -O "$TMP/maven.zip" "$URL"
+  fi
+  unzip -q "$TMP/maven.zip" -d "$TMP"
+  rm -rf "$DIST"
+  mv "$TMP/$NAME" "$DIST"
+  rm -rf "$TMP"
+fi
+exec "$DIST/bin/mvn" -f "$BASEDIR/pom.xml" "$@"
