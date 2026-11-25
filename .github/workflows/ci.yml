@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  java:
+    name: Java ${{ matrix.lab }} (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        lab: [lab-01, lab-02, lab-03, lab-04, lab-05]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.lab }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify and package (macOS / Ubuntu)
+        if: runner.os != 'Windows'
+        run: ./mvnw -B verify
+      - name: Verify and package (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: mvnw.cmd -B verify
+      - name: Run JAR
+        shell: bash
+        run: java -jar target/plant-nursery-*.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.lab }}-jar-${{ matrix.os }}
+          path: ${{ matrix.lab }}/target/plant-nursery-*.jar
+
+  python:
+    name: Python ${{ matrix.lab }} (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        lab: [lab-06, lab-07]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.lab }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install project
+        run: python -m pip install -e ".[dev]"
+      - name: Test
+        run: python -m pytest
+      - name: Lint
+        run: ruff check .
+      - name: Format check
+        run: ruff format --check .
+      - name: Build wheel
+        run: python -m build --wheel
+      - name: CLI success and error codes
+        shell: bash
+        run: |
+          python -m ${{ matrix.lab == 'lab-06' && 'kzp_lab06' || 'kzp_lab07' }}.cli data/input.csv reports/summary.txt
+          set +e
+          python -m ${{ matrix.lab == 'lab-06' && 'kzp_lab06' || 'kzp_lab07' }}.cli data/broken.csv reports/broken.txt
+          test $? -eq 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.lab }}-wheel-${{ matrix.os }}
+          path: ${{ matrix.lab }}/dist/*.whl
